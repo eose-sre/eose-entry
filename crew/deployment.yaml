@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ct-fac-portal
+  namespace: eose-entry
+  labels:
+    app: ct-fac-portal
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ct-fac-portal
+  template:
+    metadata:
+      labels:
+        app: ct-fac-portal
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: ct-fac-portal
+        image: eoseentry.azurecr.io/pemos-portal:latest
+        ports:
+        - containerPort: 8080
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 128Mi
+        env:
+        - name: SILO
+          value: ct-fac
+        - name: PORT
+          value: "8080"
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: tmp
+        emptyDir: {}
