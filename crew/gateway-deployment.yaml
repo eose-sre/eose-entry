@@ -22,9 +22,9 @@ spec:
         - sh
         - -c
         - |
-          mkdir -p /root/.openclaw/agents/ct-fac/agent /root/.openclaw/workspace
-          cp /config/openclaw.json /root/.openclaw/openclaw.json
-          cp /auth/auth-profiles.json /root/.openclaw/agents/ct-fac/agent/auth-profiles.json
+          mkdir -p /home/node/.openclaw/agents/ct-fac/agent /home/node/.openclaw/workspace
+          cp /config/openclaw.json /home/node/.openclaw/openclaw.json
+          cp /auth/auth-profiles.json /home/node/.openclaw/agents/ct-fac/agent/auth-profiles.json
           openclaw gateway run
         env:
         - name: OPENCLAW_GATEWAY_TOKEN
@@ -40,7 +40,7 @@ spec:
         - name: auth
           mountPath: /auth
         - name: workspace
-          mountPath: /root/.openclaw/workspace
+          mountPath: /home/node/.openclaw/workspace
       volumes:
       - name: config
         configMap:
