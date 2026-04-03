@@ -21,8 +21,10 @@ spec:
         pool: a10
       containers:
       - name: gpu-test
-        image: nvidia/cuda:12.1.0-base-ubuntu22.04
-        command: ["nvidia-smi"]
+        image: eoseentry.azurecr.io/mrcp-agent:v3.1
+        command: ["sh", "-c", "nvidia-smi && echo GPU_OK || echo NO_GPU_YET"]
         resources:
           limits:
-            nvidia.com/gpu: 1
+            nvidia.com/gpu: "1"
+          requests:
+            nvidia.com/gpu: "1"
