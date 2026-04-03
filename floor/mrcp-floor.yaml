@@ -1,0 +1,140 @@
+# MRCP Under-Floor — ARB-616 — The Spinning Top
+# kubectl apply -f mrcp-floor.yaml
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: merostone-store
+  namespace: eose-entry
+  labels: {app: merostone-store, floor: mrcp}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: merostone-store}
+  template:
+    metadata:
+      labels: {app: merostone-store, floor: mrcp}
+    spec:
+      containers:
+      - name: store
+        image: eoseentry.azurecr.io/merostone-store:v1
+        env:
+        - {name: SILO, value: "ct-fac"}
+        - {name: MEROSTONE_MODE, value: "index"}
+        - {name: MEROSTONE_REMOTE, value: "https://merostone.eose.ca"}
+        - {name: PORT, value: "9348"}
+        ports:
+        - {containerPort: 9348}
+        resources:
+          requests: {cpu: 20m, memory: 64Mi}
+          limits: {cpu: 100m, memory: 128Mi}
+        volumeMounts:
+        - {name: data, mountPath: /data/merostone}
+      volumes:
+      - {name: data, emptyDir: {}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: merostone-store
+  namespace: eose-entry
+spec:
+  selector: {app: merostone-store}
+  ports:
+  - {port: 9348, targetPort: 9348}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mdsms-router
+  namespace: eose-entry
+  labels: {app: mdsms-router, floor: mrcp}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: mdsms-router}
+  template:
+    metadata:
+      labels: {app: mdsms-router, floor: mrcp}
+    spec:
+      containers:
+      - name: router
+        image: eoseentry.azurecr.io/mdsms-router:v1
+        env:
+        - {name: SILO, value: "ct-fac"}
+        - {name: PORT, value: "9349"}
+        - {name: LANE1, value: "http://merostone-store.eose-entry.svc.cluster.local:9348"}
+        - {name: LANE2, value: "http://merostone-store.eose-entry.svc.cluster.local:9348"}
+        - {name: LANE3, value: "http://merostone-store.eose-entry.svc.cluster.local:9348"}
+        - {name: LANE4, value: "http://merostone-store.eose-entry.svc.cluster.local:9348"}
+        - {name: LANE5, value: "https://merostone.eose.ca/api/merostone"}
+        - {name: LANE6, value: "http://merostone-store.eose-entry.svc.cluster.local:9348"}
+        ports:
+        - {containerPort: 9349}
+        resources:
+          requests: {cpu: 10m, memory: 32Mi}
+          limits: {cpu: 50m, memory: 64Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mdsms-router
+  namespace: eose-entry
+spec:
+  selector: {app: mdsms-router}
+  ports:
+  - {port: 9349, targetPort: 9349}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mrcp-agent
+  namespace: eose-entry
+  labels: {app: mrcp-agent, floor: mrcp}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: mrcp-agent}
+  template:
+    metadata:
+      labels: {app: mrcp-agent, floor: mrcp}
+    spec:
+      serviceAccountName: eose-operator
+      automountServiceAccountToken: true
+      containers:
+      - name: mrcp
+        image: eoseentry.azurecr.io/mrcp-agent:v1
+        env:
+        - {name: SILO, value: "ct-fac"}
+        - {name: MEROSTONE_URL, value: "https://merostone.eose.ca"}
+        - {name: REPORT_INTERVAL, value: "60000"}
+        - {name: POLL_INTERVAL, value: "10000"}
+        resources:
+          requests: {cpu: 20m, memory: 32Mi}
+          limits: {cpu: 100m, memory: 64Mi}
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          capabilities: {drop: [ALL]}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mrcp-seed
+  namespace: eose-entry
+  labels: {floor: mrcp}
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: seed
+        image: eoseentry.azurecr.io/mrcp-seed:v1
+        env:
+        - {name: SILO, value: "ct-fac"}
+        - {name: MEROSTONE_STORE, value: "http://merostone-store.eose-entry.svc.cluster.local:9348"}
+        resources:
+          requests: {cpu: 10m, memory: 32Mi}
+          limits: {cpu: 50m, memory: 64Mi}
