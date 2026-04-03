@@ -15,32 +15,44 @@ spec:
     spec:
       serviceAccountName: eose-operator
       automountServiceAccountToken: true
-      containers:
-      - name: gateway
+      initContainers:
+      - name: setup
         image: eoseentry.azurecr.io/openclaw:latest
         command:
         - sh
         - -c
         - |
-          mkdir -p /home/node/.openclaw/agents/ct-fac/agent /home/node/.openclaw/workspace
-          cp /config/openclaw.json /home/node/.openclaw/openclaw.json
-          cp /auth/auth-profiles.json /home/node/.openclaw/agents/ct-fac/agent/auth-profiles.json
-          openclaw gateway run
+          mkdir -p /oc-home/.openclaw/agents/ct-fac/agent /oc-home/.openclaw/workspace
+          cp /config/openclaw.json /oc-home/.openclaw/openclaw.json
+          cp /auth/auth-profiles.json /oc-home/.openclaw/agents/ct-fac/agent/auth-profiles.json
+          echo "setup done"
+          ls /oc-home/.openclaw/
+        volumeMounts:
+        - name: config
+          mountPath: /config
+        - name: auth
+          mountPath: /auth
+        - name: oc-home
+          mountPath: /oc-home
+      containers:
+      - name: gateway
+        image: eoseentry.azurecr.io/openclaw:latest
+        command: ["openclaw", "gateway", "run"]
         env:
         - name: OPENCLAW_GATEWAY_TOKEN
           value: "ct-fac-eose-2026"
+        - name: HOME
+          value: "/oc-home"
         ports:
         - containerPort: 18830
         resources:
           requests: {cpu: 100m, memory: 256Mi}
           limits: {cpu: 500m, memory: 512Mi}
         volumeMounts:
-        - name: config
-          mountPath: /config
-        - name: auth
-          mountPath: /auth
+        - name: oc-home
+          mountPath: /oc-home
         - name: workspace
-          mountPath: /home/node/.openclaw/workspace
+          mountPath: /oc-home/.openclaw/workspace
       volumes:
       - name: config
         configMap:
@@ -49,4 +61,6 @@ spec:
         secret:
           secretName: ct-gateway-auth
       - name: workspace
+        emptyDir: {}
+      - name: oc-home
         emptyDir: {}
