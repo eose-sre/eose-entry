@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ct-builder-gateway
+  namespace: eose-entry
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ct-builder-gateway
+  template:
+    metadata:
+      labels:
+        app: ct-builder-gateway
+    spec:
+      serviceAccountName: eose-operator
+      automountServiceAccountToken: true
+      containers:
+      - name: gateway
+        image: eoseentry.azurecr.io/openclaw:latest
+        command:
+        - sh
+        - -c
+        - |
+          mkdir -p /root/.openclaw/agents/ct-fac/agent /root/.openclaw/workspace
+          cp /config/openclaw.json /root/.openclaw/openclaw.json
+          cp /auth/auth-profiles.json /root/.openclaw/agents/ct-fac/agent/auth-profiles.json
+          openclaw gateway run
+        env:
+        - name: OPENCLAW_GATEWAY_TOKEN
+          value: "ct-fac-eose-2026"
+        ports:
+        - containerPort: 18830
+        resources:
+          requests: {cpu: 100m, memory: 256Mi}
+          limits: {cpu: 500m, memory: 512Mi}
+        volumeMounts:
+        - name: config
+          mountPath: /config
+        - name: auth
+          mountPath: /auth
+        - name: workspace
+          mountPath: /root/.openclaw/workspace
+      volumes:
+      - name: config
+        configMap:
+          name: ct-gateway-config
+      - name: auth
+        secret:
+          secretName: ct-gateway-auth
+      - name: workspace
+        emptyDir: {}
