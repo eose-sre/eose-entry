@@ -103,7 +103,7 @@ spec:
       automountServiceAccountToken: true
       containers:
       - name: mrcp
-        image: eoseentry.azurecr.io/mrcp-agent:v3.1
+        image: eoseentry.azurecr.io/mrcp-agent:v3.2
         env:
         - {name: SILO, value: "ct-fac"}
         - {name: MEROSTONE_URL, value: "https://merostone.eose.ca"}
