@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tfe-agent
+  namespace: eose-entry
+  labels:
+    app: tfe-agent
+    silo: ct-fac
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tfe-agent
+  template:
+    metadata:
+      labels:
+        app: tfe-agent
+        silo: ct-fac
+    spec:
+      serviceAccountName: eose-operator
+      containers:
+      - name: tfe
+        image: eoseentry.azurecr.io/tfe-agent:v1
+        env:
+        - name: SILO
+          value: "ct-fac"
+        - name: MEROSTONE_URL
+          value: "https://merostone.eose.ca"
+        - name: TFE_HOST
+          valueFrom:
+            secretKeyRef:
+              name: tfe-credentials
+              key: TFE_HOST
+        - name: TFE_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: tfe-credentials
+              key: TFE_TOKEN
+        - name: POLL_INTERVAL
+          value: "10000"
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "64Mi"
+          limits:
+            cpu: "200m"
+            memory: "128Mi"
