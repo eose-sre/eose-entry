@@ -1,53 +1,54 @@
 #!/bin/bash
-# CT-FAC Crew Deploy — tested on aks-eose-aaas-dev 2026-04-02
-# Reads Anthropic key from local openclaw config — no copy-paste needed
-# Usage: bash deploy-crew.sh
+# CT-FAC Crew Deploy
+# Uses msi01 MAL as primary model provider (local fleet first)
+# Falls back to Anthropic if ANTHROPIC_KEY is set
 set -e
 
 NS=${NAMESPACE:-eose-entry}
 GATEWAY_TOKEN=ct-fac-eose-2026
+MAL_URL=${MAL_URL:-http://192.168.2.18:9334}
+ANTHROPIC_KEY=${ANTHROPIC_KEY:-}
 
-# Pull key from local openclaw config
-if command -v node &>/dev/null; then
-  ANTHROPIC_KEY=$(node -e "
-    const fs=require('fs');
-    const cfg=JSON.parse(fs.readFileSync(process.env.HOME+'/.openclaw/openclaw.json','utf8'));
-    process.stdout.write(cfg.models.providers.anthropic.apiKey);
-  " 2>/dev/null)
-fi
+echo "📦 Deploying CT-FAC crew to: $NS"
+echo "🔗 MAL: $MAL_URL"
 
-if [ -z "$ANTHROPIC_KEY" ]; then
-  echo "ERROR: Could not read key from ~/.openclaw/openclaw.json"
-  echo "Set ANTHROPIC_KEY env var manually and re-run"
-  exit 1
-fi
-
-echo "✅ Key found (${#ANTHROPIC_KEY} chars)"
-echo "📦 Deploying to namespace: $NS"
-
-# 1. Auth secret
-kubectl create secret generic ct-gateway-auth -n $NS \
-  --from-literal=auth-profiles.json="{\"version\":1,\"profiles\":{\"anthropic:default\":{\"type\":\"api_key\",\"provider\":\"anthropic\",\"key\":\"${ANTHROPIC_KEY}\"}}}" \
-  --dry-run=client -o yaml | kubectl apply -f -
-echo "✅ Auth secret"
-
-# 2. Config map
+# Config with MAL as primary
 kubectl create configmap ct-gateway-config -n $NS \
-  --from-literal=openclaw.json='{
-    "gateway": {
-      "mode": "local", "bind": "lan",
-      "auth": {"mode": "token"},
-      "port": 18830,
-      "controlUi": {"dangerouslyAllowHostHeaderOriginFallback": true}
+  --from-literal=openclaw.json="{
+    \"gateway\": {
+      \"mode\": \"local\", \"bind\": \"lan\",
+      \"auth\": {\"mode\": \"token\"},
+      \"port\": 18830,
+      \"controlUi\": {\"dangerouslyAllowHostHeaderOriginFallback\": true}
     },
-    "agents": {
-      "defaults": {"workspace": "/root/.openclaw/workspace", "skipBootstrap": true},
-      "list": [{"id": "ct-fac", "default": true, "workspace": "/root/.openclaw/workspace"}]
+    \"models\": {
+      \"default\": \"mal/default\",
+      \"providers\": {
+        \"mal\": {
+          \"baseUrl\": \"${MAL_URL}\",
+          \"apiKey\": \"mal-local\",
+          \"models\": [{\"id\": \"default\", \"name\": \"MAL Fleet Router\", \"maxTokens\": 8192}]
+        }
+      }
+    },
+    \"agents\": {
+      \"defaults\": {\"workspace\": \"/root/.openclaw/workspace\", \"skipBootstrap\": true},
+      \"list\": [{\"id\": \"ct-fac\", \"default\": true, \"workspace\": \"/root/.openclaw/workspace\"}]
     }
-  }' --dry-run=client -o yaml | kubectl apply -f -
-echo "✅ Config map"
+  }" --dry-run=client -o yaml | kubectl apply -f -
 
-# 3. Deployment + Service
+# Auth — MAL key only, Anthropic optional
+AUTH_PROFILES="{\"version\":1,\"profiles\":{\"mal:default\":{\"type\":\"api_key\",\"provider\":\"mal\",\"key\":\"mal-local\"}"
+if [ -n "$ANTHROPIC_KEY" ]; then
+  AUTH_PROFILES="${AUTH_PROFILES},\"anthropic:default\":{\"type\":\"api_key\",\"provider\":\"anthropic\",\"key\":\"${ANTHROPIC_KEY}\"}"
+fi
+AUTH_PROFILES="${AUTH_PROFILES}}}"
+
+kubectl create secret generic ct-gateway-auth -n $NS \
+  --from-literal=auth-profiles.json="$AUTH_PROFILES" \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+# Deployment
 kubectl apply -f - <<EOF
 apiVersion: apps/v1
 kind: Deployment
